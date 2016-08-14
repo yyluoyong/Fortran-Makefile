@@ -32,7 +32,7 @@ EXEC := main
 
 #终极目标
 $(EXEC): $(objectFiles)
-	$(F90) $(LKFLAGS) -o $@ $^
+	$(F90) $^ $(LKFLAGS) -o $@
 
 #伪目标
 .PHONY: clean run
@@ -54,7 +54,7 @@ $(buildDir)/%.o : $<
 #生成依赖文件
 $(buildDir)/fortranDependency.d : $(sourceFiles) fortranDependency.py
 	@mkdir -p $(dir $@)
-	python fortrandependency.py $(sourceDir) > $@
+	python fortranDependency.py $(sourceDir) > $@
 
 #导入依赖关系
 -include $(buildDir)/fortranDependency.d

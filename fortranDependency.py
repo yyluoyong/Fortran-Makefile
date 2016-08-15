@@ -25,8 +25,41 @@ class FortranFileDependency:
         #文件使用的module，{key:set()}
         self.__filesUsedModule = {}
 
+
+    #提取每行使用的module
+    def __getProvidedModuleName(self, line):
+        line = line.lower().strip()
+        regModule = re.compile("^\s*module\s+")
+
+        if regModule.match(line):
+            moduleName = re.split("\s", line)[1]
+            #去除注释部分
+            moduleName = re.sub("!.*", "", moduleName)
+
+            return moduleName
+        else:
+            return ""
+
+    #提取每一行提供的module
+    def __getUsedModuleName(self, line):
+        line = line.lower().strip()
+        regModule = re.compile("^\s*use\s+")
+
+        if regModule.match(line):
+            moduleName = re.split("\s", line)[1]
+            # 去除注释部分和逗号选用部分
+            moduleName = re.sub("[,!].*", "", moduleName)
+
+            # mpi库不包含在内
+            if moduleName == "mpi":
+                return ""
+
+            return moduleName
+        else:
+            return ""
+
     #生成依赖关系
-    def __getModuleData(self, filePath):
+    def __genDependency(self, filePath):
         fileObeject = open(filePath, 'r')
 
         #该文件包含的module
@@ -36,31 +69,15 @@ class FortranFileDependency:
 
         try:
             for line in fileObeject:
-                #包含的module
-                line = line.strip().lower()
-                if line.startswith("module"):
-                    commentCharIndex = line.find(self.__commentChar)
-                    #行后注释
-                    if commentCharIndex != -1:
-                        lineContent = line[:commentCharIndex]
-                    else:
-                        lineContent = line
-                    #providedModules.add(lineContent.split()[-1].strip()+".mod")
-                    providedModules.add(lineContent.split()[-1].strip())
-                #使用的module
-                elif line.startswith("use"):
-                    commentCharIndex = line.find(self.__commentChar)
-                    #行后注释
-                    if commentCharIndex != -1:
-                        lineContent = line[:commentCharIndex]
-                    else:
-                        lineContent = line
+                moduleName = self.__getProvidedModuleName(line)
 
-                    #usedModules.add(lineContent.split()[1].split(",")[0].strip()+".mod")
-                    oneModule = lineContent.split()[1].split(",")[0].strip()
-                    if oneModule == "mpi":
-                        continue
-                    usedModules.add(oneModule)
+                if moduleName != "":
+                    providedModules.add(moduleName)
+                else:
+                    moduleName = self.__getUsedModuleName(line)
+
+                    if moduleName != "":
+                        usedModules.add(moduleName)
         finally:
             fileObeject.close()
 
@@ -73,13 +90,15 @@ class FortranFileDependency:
 
         #遍历所有指定目录
         for targetDir in self.__targetDir:
+            #遍历该目录的所有文件
             for fortranFileName in os.listdir(targetDir):
                 fortranFilePath = os.path.join(targetDir, fortranFileName)
                 if(os.path.isfile(fortranFilePath)):
                     fortranFileType = os.path.splitext(fortranFileName)[-1]
+                    #匹配Fortran格式文件
                     for targetType in self.__targetTypes:
                         if targetType == fortranFileType:
-                            self.__getModuleData(fortranFilePath)
+                            self.__genDependency(fortranFilePath)
 
 
     #获得依赖关系

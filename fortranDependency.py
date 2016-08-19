@@ -5,10 +5,14 @@ import sys
 
 class FortranFileDependency:
 
-    def __init__(self, buildDir="build/", sourceDir=["./src"], targetDir=["./src"], targetTypes=[".f90", ".F90"], commentChar="!"):
+    def __init__(self, buildDir="build/", sourceFilePath="", sourceDir=["./src"], \
+                 targetDir=["./src"], targetTypes=[".f90", ".F90"], commentChar="!"):
 
         #编译文件放置位置
         self.__buildDir = buildDir
+
+        #需要分析依赖关系的单个文件路径
+        self.__sourceFilePath = sourceFilePath
 
         #需要分析依赖关系的源码文件所在位置
         self.__sourceDir = sourceDir
@@ -30,7 +34,7 @@ class FortranFileDependency:
 
 
     #提取每行使用的module
-    def __getLineProvidedModuleName(self, line):
+    def __getConModInLine(self, line):
         line = line.lower().strip()
         regModule = re.compile("^\s*module\s+")
 
@@ -44,7 +48,7 @@ class FortranFileDependency:
             return ""
 
     #提取每一行提供的module
-    def __getLineUsedModuleName(self, line):
+    def __getUsedModInLine(self, line):
         line = line.lower().strip()
         regModule = re.compile("^\s*use\s+")
 
@@ -62,7 +66,7 @@ class FortranFileDependency:
             return ""
 
     #获得源码文件提供的module名字
-    def __getFileProvidedModule(self, filePath):
+    def __getConModInFile(self, filePath):
         fileObeject = open(filePath, 'r')
 
         #该文件包含的module
@@ -70,7 +74,7 @@ class FortranFileDependency:
 
         try:
             for line in fileObeject:
-                moduleName = self.__getLineProvidedModuleName(line)
+                moduleName = self.__getConModInLine(line)
 
                 if moduleName != "":
                     providedModules.add(moduleName)
@@ -81,7 +85,7 @@ class FortranFileDependency:
 
 
     #获得源码文件使用的module名字
-    def __getFileUsedModule(self, filePath):
+    def __getUsedModInFile(self, filePath):
         fileObeject = open(filePath, 'r')
 
         #该文件使用的module
@@ -89,9 +93,9 @@ class FortranFileDependency:
 
         try:
             for line in fileObeject:
-                moduleName = self.__getLineProvidedModuleName(line)
+                moduleName = self.__getConModInLine(line)
 
-                moduleName = self.__getLineUsedModuleName(line)
+                moduleName = self.__getUsedModInLine(line)
 
                 if moduleName != "":
                     usedModules.add(moduleName)
@@ -101,11 +105,11 @@ class FortranFileDependency:
         self.__filesUsedModule[filePath] = usedModules
 
 
-    #生成依赖关系字典
-    def __genDependencyDict(self):
+    #获取目录中所有文件包含的module
+    def __getConModInDir(self, Dirs):
 
         #遍历所有指定目录,获得文件提供的module字典
-        for targetDir in self.__targetDir:
+        for targetDir in Dirs:
             #遍历该目录的所有文件
             for fortranFileName in os.listdir(targetDir):
                 fortranFilePath = os.path.join(targetDir, fortranFileName)
@@ -114,10 +118,12 @@ class FortranFileDependency:
                     #匹配Fortran格式文件
                     for targetType in self.__targetTypes:
                         if targetType == fortranFileType:
-                            self.__getFileProvidedModule(fortranFilePath)
+                            self.__getConModInFile(fortranFilePath)
 
+    #获取目录中所有文件使用的module
+    def __getUsedModInDir(self, Dirs):
         # 遍历所有指定目录
-        for targetDir in self.__sourceDir:
+        for targetDir in Dirs:
             # 遍历该目录的所有文件
             for fortranFileName in os.listdir(targetDir):
                 fortranFilePath = os.path.join(targetDir, fortranFileName)
@@ -126,13 +132,18 @@ class FortranFileDependency:
                     # 匹配Fortran格式文件
                     for targetType in self.__targetTypes:
                         if targetType == fortranFileType:
-                            self.__getFileUsedModule(fortranFilePath)
+                            self.__getUsedModInFile(fortranFilePath)
 
 
     #获得依赖关系
     def getDependency(self):
 
-        self.__genDependencyDict()
+        self.__getConModInDir(self.__targetDir)
+
+        if self.__sourceFilePath != "":
+            self.__getUsedModInFile(self.__sourceFilePath)
+        else:
+            self.__getUsedModInDir(self.__sourceDir)
 
         #保存依赖关系的字典
         dependencyDict = {}
@@ -166,7 +177,10 @@ class FortranFileDependency:
 
 def main(dirArgs):
 
-    fortranDependency = FortranFileDependency(sourceDir=[dirArgs[0]], targetDir=dirArgs[1:])
+    if os.path.isfile(dirArgs[0]):
+        fortranDependency = FortranFileDependency(sourceFilePath=dirArgs[0], targetDir=dirArgs[1:])
+    else:
+        fortranDependency = FortranFileDependency(sourceDir=[dirArgs[0]], targetDir=dirArgs[1:])
 
     dependencyDict = fortranDependency.getDependency()
 
